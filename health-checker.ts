@@ -14,9 +14,10 @@
  *   AZURE_TENANT_ID       - AzureテナントID
  *   AZURE_CLIENT_ID       - AzureクライアントID（サービスプリンシパル）
  *   AZURE_CLIENT_SECRET   - Azureクライアントシークレット
+ *   DOCKER_CONTAINER_NAME - 制御対象のDockerコンテナ名
  *
  * 実行:
- *   deno run --allow-net --allow-env health-checker.ts
+ *   deno run --allow-net --allow-env --allow-run health-checker.ts
  */
 
 import {
@@ -44,6 +45,9 @@ const config = {
     tenantId: Deno.env.get("AZURE_TENANT_ID") ?? "",
     clientId: Deno.env.get("AZURE_CLIENT_ID") ?? "",
     clientSecret: Deno.env.get("AZURE_CLIENT_SECRET") ?? "",
+  },
+  docker: {
+    containerName: Deno.env.get("DOCKER_CONTAINER_NAME") ?? "",
   },
 };
 
@@ -218,9 +222,47 @@ async function startAzureVM(): Promise<{ success: boolean; message: string }> {
     }
   } catch (error) {
     console.error("Azure VM起動エラー:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return {
       success: false,
-      message: `エラーが発生しました: ${error.message}`,
+      message: `エラーが発生しました: ${errorMessage}`,
+    };
+  }
+}
+
+// Dockerコンテナ再起動
+async function restartDockerContainer(): Promise<{ success: boolean; message: string }> {
+  if (!config.docker.containerName) {
+    return {
+      success: false,
+      message: "DOCKER_CONTAINER_NAME が設定されていません。",
+    };
+  }
+
+  try {
+    const command = new Deno.Command("docker", {
+      args: ["restart", config.docker.containerName],
+    });
+    const { code, stderr } = await command.output();
+
+    if (code === 0) {
+      return {
+        success: true,
+        message: `コンテナ **${config.docker.containerName}** を再起動しました。`,
+      };
+    } else {
+      const errorMsg = new TextDecoder().decode(stderr);
+      return {
+        success: false,
+        message: `コンテナ再起動に失敗: ${errorMsg}`,
+      };
+    }
+  } catch (error) {
+    console.error("Dockerコンテナ再起動エラー:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      message: `エラーが発生しました: ${errorMessage}`,
     };
   }
 }
@@ -268,6 +310,11 @@ async function main(): Promise<void> {
             {
               name: "startvm",
               description: "Azure仮想マシンを起動します",
+              type: ApplicationCommandTypes.ChatInput,
+            },
+            {
+              name: "restartcontainer",
+              description: "Dockerコンテナを再起動します",
               type: ApplicationCommandTypes.ChatInput,
             },
           ]);
@@ -324,6 +371,48 @@ async function main(): Promise<void> {
 
             console.log(
               `[${timestamp}] /startvm コマンド実行: ${result.success ? "成功" : "失敗"}`
+            );
+          }
+
+          if (interaction.data?.name === "restartcontainer") {
+            // 処理中を表示
+            await bot.helpers.sendInteractionResponse(
+              interaction.id,
+              interaction.token,
+              {
+                type: 5, // DeferredChannelMessageWithSource
+              }
+            );
+
+            // Dockerコンテナ再起動
+            const result = await restartDockerContainer();
+            const timestamp = new Date().toLocaleString("ja-JP", {
+              timeZone: "Asia/Tokyo",
+            });
+
+            // 結果を返信
+            await bot.helpers.editOriginalInteractionResponse(
+              interaction.token,
+              {
+                embeds: [
+                  {
+                    title: result.success ? "🔄 コンテナ再起動" : "❌ エラー",
+                    description: result.message,
+                    fields: [
+                      {
+                        name: "実行時刻",
+                        value: timestamp,
+                        inline: true,
+                      },
+                    ],
+                    color: result.success ? 0x00ff00 : 0xff0000,
+                  },
+                ],
+              }
+            );
+
+            console.log(
+              `[${timestamp}] /restartcontainer コマンド実行: ${result.success ? "成功" : "失敗"}`
             );
           }
         }

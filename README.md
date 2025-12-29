@@ -9,6 +9,7 @@
 - Active ↔ Inactive の状態変化時にDM通知
 - BotのActivityに現在の状態を表示
 - **Azure仮想マシンの起動コマンド** (`/startvm`)
+- **Dockerコンテナの再起動コマンド** (`/restartcontainer`)
 
 ## 必要条件
 
@@ -46,12 +47,15 @@ export AZURE_VM_NAME="your_vm_name"
 export AZURE_TENANT_ID="your_tenant_id"
 export AZURE_CLIENT_ID="your_client_id"
 export AZURE_CLIENT_SECRET="your_client_secret"
+
+# Dockerコンテナ再起動機能（オプション）
+export DOCKER_CONTAINER_NAME="your_container_name"
 ```
 
 ### 3. 実行
 
 ```bash
-deno run --allow-net --allow-env health-checker.ts
+deno run --allow-net --allow-env --allow-run health-checker.ts
 ```
 
 ## 環境変数一覧
@@ -79,6 +83,12 @@ deno run --allow-net --allow-env health-checker.ts
 | `AZURE_CLIENT_SECRET` | ❌ | サービスプリンシパルのクライアントシークレット |
 
 **注**: Azure VM起動機能を使用する場合は、上記のすべてのAzure関連環境変数が必要です。
+
+### Dockerコンテナ再起動機能（オプション）
+
+| 変数名 | 必須 | 説明 |
+|--------|------|------|
+| `DOCKER_CONTAINER_NAME` | ❌ | 再起動対象のDockerコンテナ名 |
 
 ## 動作
 
@@ -116,3 +126,16 @@ az ad sp create-for-rbac --name "discord-bot-vm-starter" --role "Virtual Machine
 # - password → AZURE_CLIENT_SECRET
 # - tenant → AZURE_TENANT_ID
 ```
+
+### Dockerコンテナ再起動コマンド
+
+Discord上で `/restartcontainer` コマンドを実行すると、設定されたDockerコンテナを再起動します。
+
+**使い方:**
+1. Discordのチャンネルまたは DM で `/restartcontainer` と入力
+2. Bot がローカルの `docker restart` コマンドを実行
+3. 結果（成功/失敗）が埋め込みメッセージで返される
+
+**必要な設定:**
+- `DOCKER_CONTAINER_NAME` 環境変数の設定
+- Botを実行するユーザーがDockerコマンドを実行できる権限を持っていること
